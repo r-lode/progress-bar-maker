@@ -15,26 +15,78 @@ def save_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f, indent=4)
 
-def create_progress_bar(exam_label, goal, current, filename):
-    width = 400
-    height = 50
-    bar_width = int(width * min(current / goal, 1.0))
 
-    img = Image.new('RGB', (width, height), color='white')
+def create_progress_bar(exam_label, goal, current, filename):
+    # Overall image dimensions
+    bar_width = 100
+    bar_height = 400
+    label_height = 40
+    total_height = label_height + bar_height
+    radius = 15
+
+    # Calculate progress height
+    progress_height = int(bar_height * min(current / goal, 1.0))
+    progress_top = label_height + bar_height - progress_height
+
+    # Create base image with transparent background
+    img = Image.new('RGBA', (bar_width, total_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Background bar
-    draw.rectangle([0, 0, width, height], fill='lightgrey')
+    # Colors
+    bg_color = '#FFFFFF'      # White for unfilled
+    progress_color = '#001f3f' # Navy for filled
+    border_color = '#333333'   # Dark border
+    label_color = '#FFFFFF'    # White title label
 
-    # Progress
-    draw.rectangle([0, 0, bar_width, height], fill='green')
+    # Create mask for rounded corners
+    full_mask = Image.new('L', (bar_width, total_height), 0)
+    mask_draw = ImageDraw.Draw(full_mask)
+    mask_draw.rounded_rectangle([0, 0, bar_width, total_height], radius, fill=255)
 
-    # Text
+    # Draw unfilled background
+    draw.rounded_rectangle([0, label_height, bar_width, total_height], radius, fill=bg_color, outline=border_color, width=2)
+
+    # Draw progress fill
+    progress_img = Image.new('RGBA', (bar_width, bar_height), (0, 0, 0, 0))
+    progress_draw = ImageDraw.Draw(progress_img)
+    progress_draw.rectangle([0, bar_height - progress_height, bar_width, bar_height], fill=progress_color)
+    img.paste(progress_img, (0, label_height), progress_img)
+
+    # Draw tick marks and labels dynamically colored
     font = ImageFont.load_default()
-    text = f"{exam_label}: {current}/{goal} hours"
-    draw.text((10, 15), text, fill='black', font=font)
+    tick_spacing = 50
+    label_padding = 5
+    for tick in range(0, goal + 1, tick_spacing):
+        y = label_height + bar_height - int(bar_height * tick / goal)
+        y = min(max(label_height + label_padding, y), label_height + bar_height - label_padding)
 
-    img.save(filename)
+        # Determine tick color: white if in progress area, black otherwise
+        tick_color = '#FFFFFF' if y >= progress_top else '#000000'
+
+        # Draw tick line
+        draw.line([(label_padding, y), (20, y)], fill=tick_color, width=2)
+
+        # Draw tick label
+        draw.text((25, y - 6), f"{tick}", fill=tick_color, font=font)
+
+    # Draw the exam label text at top in white, with dark outline for readability
+    label_bbox = draw.textbbox((0, 0), exam_label, font=font)
+    label_width = label_bbox[2] - label_bbox[0]
+    label_x = (bar_width - label_width) // 2
+    label_y = (label_height - (label_bbox[3] - label_bbox[1])) // 2
+
+    outline_color = '#000000'
+    for offset in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+        draw.text((label_x + offset[0], label_y + offset[1]), exam_label, fill=outline_color, font=font)
+
+    draw.text((label_x, label_y), exam_label, fill=label_color, font=font)
+
+
+    # Apply rounded corner mask
+    img.putalpha(full_mask)
+
+    # Save final image
+    img.convert('RGB').save(filename)
 
 def add_hours(user_name, exam_name, hours):
     data = load_data()
