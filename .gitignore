@@ -176,4 +176,5 @@ cython_debug/
 venv/
 __pycache__/
 *.pyc
-*.png
+#*.png
+
